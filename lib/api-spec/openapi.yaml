@@ -1,0 +1,356 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: healing
+    description: Workflow monitoring, diagnosis, and recovery operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /healing/overview:
+    get:
+      operationId: getHealingOverview
+      tags: [healing]
+      summary: Get dashboard metrics and recent activity
+      responses:
+        "200":
+          description: Dashboard overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealingOverview"
+  /healing/workflows:
+    get:
+      operationId: listHealingWorkflows
+      tags: [healing]
+      summary: List monitored workflows
+      responses:
+        "200":
+          description: Workflow list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HealingWorkflow"
+    post:
+      operationId: createHealingWorkflow
+      tags: [healing]
+      summary: Create a monitored workflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HealingWorkflowInput"
+      responses:
+        "201":
+          description: Workflow created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealingWorkflow"
+  /healing/workflows/{workflowId}:
+    patch:
+      operationId: updateHealingWorkflow
+      tags: [healing]
+      summary: Update a workflow's monitoring settings
+      parameters:
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HealingWorkflowUpdate"
+      responses:
+        "200":
+          description: Workflow updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealingWorkflow"
+        "404":
+          description: Workflow not found
+    delete:
+      operationId: deleteHealingWorkflow
+      tags: [healing]
+      summary: Delete a workflow
+      parameters:
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Workflow deleted
+        "404":
+          description: Workflow not found
+  /healing/workflows/{workflowId}/run:
+    post:
+      operationId: runHealingWorkflow
+      tags: [healing]
+      summary: Run a workflow with an optional simulated failure
+      parameters:
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HealingRunInput"
+      responses:
+        "201":
+          description: Workflow run completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealingRun"
+        "404":
+          description: Workflow not found
+  /healing/incidents:
+    get:
+      operationId: listHealingIncidents
+      tags: [healing]
+      summary: List incidents, newest first
+      responses:
+        "200":
+          description: Incident list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HealingIncident"
+  /healing/incidents/{incidentId}:
+    get:
+      operationId: getHealingIncident
+      tags: [healing]
+      summary: Get an incident and its diagnosis
+      parameters:
+        - name: incidentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Incident detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealingIncident"
+        "404":
+          description: Incident not found
+  /healing/incidents/{incidentId}/diagnose:
+    post:
+      operationId: diagnoseHealingIncident
+      tags: [healing]
+      summary: Analyze incident logs and propose a corrective action
+      parameters:
+        - name: incidentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HealingDiagnosisInput"
+      responses:
+        "200":
+          description: Diagnosis and recovery recommendation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealingIncident"
+        "404":
+          description: Incident not found
+  /healing/incidents/{incidentId}/decision:
+    post:
+      operationId: decideHealingIncident
+      tags: [healing]
+      summary: Approve or reject the proposed recovery action
+      parameters:
+        - name: incidentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HealingDecisionInput"
+      responses:
+        "200":
+          description: Updated incident after decision and retry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealingIncident"
+        "404":
+          description: Incident not found
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    HealingFailureMode:
+      type: string
+      enum: [healthy, schema_mismatch, rate_limit, timeout, invalid_payload]
+    HealingWorkflowStatus:
+      type: string
+      enum: [active, paused]
+    HealingIncidentStatus:
+      type: string
+      enum: [detected, diagnosing, awaiting_approval, healing, resolved, escalated]
+    HealingRunStatus:
+      type: string
+      enum: [succeeded, failed, recovered]
+    HealingWorkflow:
+      type: object
+      required: [id, name, integration, description, status, approvalRequired, failureMode, runsToday, recoveryRate, lastRunAt, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        integration: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/HealingWorkflowStatus" }
+        approvalRequired: { type: boolean }
+        failureMode: { $ref: "#/components/schemas/HealingFailureMode" }
+        runsToday: { type: integer }
+        recoveryRate: { type: number }
+        lastRunAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    HealingWorkflowInput:
+      type: object
+      required: [name, integration, description, failureMode, approvalRequired]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        integration: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, maxLength: 500 }
+        failureMode: { $ref: "#/components/schemas/HealingFailureMode" }
+        approvalRequired: { type: boolean }
+    HealingWorkflowUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        integration: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, maxLength: 500 }
+        status: { $ref: "#/components/schemas/HealingWorkflowStatus" }
+        approvalRequired: { type: boolean }
+        failureMode: { $ref: "#/components/schemas/HealingFailureMode" }
+    HealingRunInput:
+      type: object
+      required: [failureMode]
+      properties:
+        failureMode: { $ref: "#/components/schemas/HealingFailureMode" }
+    HealingRun:
+      type: object
+      required: [id, workflowId, workflowName, status, failureMode, incidentId, durationMs, createdAt, message]
+      properties:
+        id: { type: string }
+        workflowId: { type: string }
+        workflowName: { type: string }
+        status: { $ref: "#/components/schemas/HealingRunStatus" }
+        failureMode: { $ref: "#/components/schemas/HealingFailureMode" }
+        incidentId: { type: ["string", "null"] }
+        durationMs: { type: integer }
+        createdAt: { type: string, format: date-time }
+        message: { type: string }
+    HealingIncident:
+      type: object
+      required: [id, workflowId, workflowName, severity, status, category, summary, rootCause, recommendation, patch, confidence, logExcerpt, retryCount, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        workflowId: { type: string }
+        workflowName: { type: string }
+        severity: { type: string, enum: [critical, high, medium, low] }
+        status: { $ref: "#/components/schemas/HealingIncidentStatus" }
+        category: { type: string }
+        summary: { type: string }
+        rootCause: { type: ["string", "null"] }
+        recommendation: { type: ["string", "null"] }
+        patch: { type: ["string", "null"] }
+        confidence: { type: ["number", "null"] }
+        logExcerpt: { type: string }
+        retryCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    HealingDiagnosisInput:
+      type: object
+      properties:
+        operatorNotes: { type: string, maxLength: 1000 }
+    HealingDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+    HealingActivity:
+      type: object
+      required: [id, title, detail, kind, createdAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        detail: { type: string }
+        kind: { type: string, enum: [run, incident, recovery, workflow] }
+        createdAt: { type: string, format: date-time }
+    HealingOverview:
+      type: object
+      required: [activeWorkflows, openIncidents, runsToday, recoveredToday, successRate, meanRecoverySeconds, incidentsByStatus, recentActivity]
+      properties:
+        activeWorkflows: { type: integer }
+        openIncidents: { type: integer }
+        runsToday: { type: integer }
+        recoveredToday: { type: integer }
+        successRate: { type: number }
+        meanRecoverySeconds: { type: number }
+        incidentsByStatus:
+          type: object
+          required: [detected, awaitingApproval, resolved, escalated]
+          properties:
+            detected: { type: integer }
+            awaitingApproval: { type: integer }
+            resolved: { type: integer }
+            escalated: { type: integer }
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/HealingActivity"
+
